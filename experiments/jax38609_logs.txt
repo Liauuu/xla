@@ -1,0 +1,185 @@
+﻿jax version: 0.11.0.dev20260629+7e2b1b5d0
+devices: [CpuDevice(id=0)]
+
+========================================================================
+Reproducer 1 (jax-ml/jax#38609)
+========================================================================
+
+========================================================================
+Eager intermediate values
+========================================================================
+  Q:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=-6.18898e+11  max=2.06299e+11  mean=9.68214e+09
+    first_row=[ 2.4674183e+10  2.4674183e+10 -7.4022560e+10  2.4674183e+10
+  2.4674183e+10]
+  logits:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=-3.03493e+11  max=3.3589e+11  mean=-2.39659e+09
+    first_row=[ 6.261519e+09 -3.629896e+10 -8.431319e+09  4.017375e+10 -7.812506e+09]
+  logits_max:
+    shape=(5, 1) dtype=float32
+    finite=5/5  nan=0  inf=0
+    min=6.12629e+09  max=3.3589e+11  mean=8.1558e+10
+    values=[4.0173748e+10 1.9103627e+10 6.4962140e+09 6.1262868e+09 3.3589015e+11]
+  shifted:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=-6.39383e+11  max=0  mean=-8.39546e+10
+    first_row=[-3.3912230e+10 -7.6472713e+10 -4.8605069e+10  0.0000000e+00
+ -4.7986254e+10]
+  exp_shifted:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=0  max=1  mean=0.2
+    first_row=[0. 0. 0. 1. 0.]
+  denom:
+    shape=(5, 1) dtype=float32
+    finite=5/5  nan=0  inf=0
+    min=1  max=1  mean=1
+    values=[1. 1. 1. 1. 1.]
+  weights:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=0  max=1  mean=0.2
+    first_row=[0. 0. 0. 1. 0.]
+  out:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=-0.246513  max=2.10769  mean=0.54114
+    first_row=[ 2.1076884   0.7011127  -0.21764016  0.08972669  0.07841968]
+
+========================================================================
+JIT intermediate values
+========================================================================
+  Q:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=-6.18898e+11  max=2.06299e+11  mean=9.68214e+09
+    first_row=[ 2.4674183e+10  2.4674183e+10 -7.4022560e+10  2.4674183e+10
+  2.4674183e+10]
+  logits:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=-3.03493e+11  max=3.3589e+11  mean=-2.39659e+09
+    first_row=[ 6.261519e+09 -3.629896e+10 -8.431319e+09  4.017375e+10 -7.812506e+09]
+  logits_max:
+    shape=(5, 1) dtype=float32
+    finite=5/5  nan=0  inf=0
+    min=6.12629e+09  max=3.3589e+11  mean=8.1558e+10
+    values=[4.0173748e+10 1.9103627e+10 6.4962140e+09 6.1262868e+09 3.3589015e+11]
+  shifted:
+    shape=(5, 5) dtype=float32
+    finite=25/25  nan=0  inf=0
+    min=-6.39383e+11  max=2557.42  mean=-8.39546e+10
+    first_row=[-3.3912230e+10 -7.6472705e+10 -4.8605069e+10  1.1486919e+03
+ -4.7986254e+10]
+  exp_shifted:
+    shape=(5, 5) dtype=float32
+    finite=21/25  nan=0  inf=4
+    min=0  max=0  mean=0
+    first_row=[ 0.  0.  0. inf  0.]
+  denom:
+    shape=(5, 1) dtype=float32
+    finite=1/5  nan=0  inf=4
+    min=0  max=0  mean=0
+    values=[inf  0. inf inf inf]
+  weights:
+    shape=(5, 5) dtype=float32
+    finite=16/25  nan=9  inf=0
+    min=0  max=0  mean=0
+    first_row=[ 0.  0.  0. nan  0.]
+  out:
+    shape=(5, 5) dtype=float32
+    finite=0/25  nan=25  inf=0
+    first_row=[nan nan nan nan nan]
+
+========================================================================
+Eager vs JIT step-by-step comparison
+========================================================================
+  Q: match=True  max_abs_diff=0
+  logits: match=True  max_abs_diff=0
+  logits_max: match=True  max_abs_diff=0
+  shifted: match=False  max_abs_diff=8192
+    largest finite diff at (np.int64(0), np.int64(1)): eager=-7.64727e+10  jit=-7.64727e+10  diff=8192
+  exp_shifted: match=False  max_abs_diff=1
+    largest finite diff at (np.int64(1), np.int64(3)): eager=1  jit=0  diff=1
+  denom: match=False  max_abs_diff=1
+    largest finite diff at (np.int64(1), np.int64(0)): eager=1  jit=0  diff=1
+  weights: match=False  max_abs_diff=0
+    largest finite diff at (np.int64(0), np.int64(0)): eager=0  jit=0  diff=0
+  out: match=False  max_abs_diff=nan
+
+========================================================================
+Interpretation
+========================================================================
+  Through matrix expm + scaled logits (Q, logits, logits_max):
+  Q: match=True  max_abs_diff=0
+  logits: match=True  max_abs_diff=0
+  logits_max: match=True  max_abs_diff=0
+    all match: True
+
+  Softmax numerics (shifted, exp, normalize, output):
+  shifted: match=False  max_abs_diff=8192
+    largest finite diff at (np.int64(0), np.int64(1)): eager=-7.64727e+10  jit=-7.64727e+10  diff=8192
+  exp_shifted: match=False  max_abs_diff=1
+    largest finite diff at (np.int64(1), np.int64(3)): eager=1  jit=0  diff=1
+  denom: match=False  max_abs_diff=1
+    largest finite diff at (np.int64(1), np.int64(0)): eager=1  jit=0  diff=1
+  weights: match=False  max_abs_diff=0
+    largest finite diff at (np.int64(0), np.int64(0)): eager=0  jit=0  diff=0
+  out: match=False  max_abs_diff=nan
+
+  first divergence: shifted
+  logits_max matches as a standalone tensor, but shifted = logits - max
+  diverges in JIT. NaNs then appear in exp_shifted / weights / output.
+
+  eager out[0] = [ 2.1076884   0.7011127  -0.21764016  0.08972669  0.07841968]
+  jit   out[0] = [nan nan nan nan nan]
+
+========================================================================
+Reproducer 2 (jax-ml/jax#38609)
+========================================================================
+  eager[0] = [-0.4683711   0.06610446 -0.04594699]
+  jit[0]   = [nan nan nan]
+  match: False
+
+========================================================================
+With CPU fusion pass disabled: --xla_disable_hlo_passes=fusion
+========================================================================
+  XLA_FLAGS: --xla_disable_hlo_passes=fusion
+  eager[0]: [ 2.1076884   0.7011127  -0.21764016  0.08972669  0.07841968]
+  jit[0]:   [ 2.1076884   0.7011127  -0.21764016  0.08972669  0.07841968]
+  eager/jit match: True
+
+
+========================================================================
+JIT HLO: scaled logits split across separate CPU fusions
+========================================================================
+  Entry computation (softmax-related fusions):
+
+    %multiply_reduce_fusion = f32[5]{0} fusion(%dot_general.24), kind=kLoop, calls=%fused_computation.19, metadata={op_name="jit(reproducer_1_fn)/reduce_max" stack_frame_id=4}
+    %subtract_exponential_fusion = f32[5,5]{1,0} fusion(%multiply_reduce_fusion, %dot_general.24), kind=kLoop, calls=%fused_computation.18, metadata={op_name="jit(reproducer_1_fn)/exp" stack_frame_id=16}
+    %reduce_divide_fusion = f32[5]{0} fusion(%subtract_exponential_fusion), kind=kLoop, calls=%fused_computation.17, metadata={op_name="jit(reproducer_1_fn)/div" stack_frame_id=17}
+    %broadcast_multiply_fusion = f32[5,5]{1,0} fusion(%subtract_exponential_fusion, %reduce_divide_fusion), kind=kLoop, calls=%fused_computation.16, metadata={op_name="jit(reproducer_1_fn)/div" stack_frame_id=17}
+
+  fused_computation.19 (row-max path recomputes dot*scale inside fusion):
+  %fused_computation.19 (param_0.48: f32[5,5]) -> f32[5] {
+    %param_0.48 = f32[5,5]{1,0} parameter(0)
+    %constant.314 = f32[] constant(0.44721359)
+    %broadcast.99 = f32[5,5]{1,0} broadcast(%constant.314), dimensions={}
+    %mul.10 = f32[5,5]{1,0} multiply(%param_0.48, %broadcast.99), metadata={op_name="jit(reproducer_1_fn)/mul" stack_frame_id=14}
+    %constant.315 = f32[] constant(-inf)
+    ROOT %reduce_max.6 = f32[5]{0} reduce(%mul.10, %constant.315), dimensions={1}, to_apply=%region_17.34, metadata={op_name="jit(reproducer_1_fn)/reduce_max" stack_frame_id=4}
+
+  fused_computation.18 (subtract+exp path recomputes dot*scale again):
+  %fused_computation.18 (param_0.45: f32[5], param_1.69: f32[5,5]) -> f32[5,5] {
+    %param_1.69 = f32[5,5]{1,0} parameter(1)
+    %constant.313 = f32[] constant(0.44721359)
+    %broadcast.98 = f32[5,5]{1,0} broadcast(%constant.313), dimensions={}
+    %mul.9 = f32[5,5]{1,0} multiply(%param_1.69, %broadcast.98), metadata={op_name="jit(reproducer_1_fn)/mul" stack_frame_id=14}
+    %param_0.45 = f32[5]{0} parameter(0)
+    %sub.21 = f32[5,5]{1,0} broadcast(%param_0.45), dimensions={0}, metadata={op_name="jit(reproducer_1_fn)/sub" stack_frame_id=15}
+    %sub.20 = f32[5,5]{1,0} subtract(%mul.9, %sub.21), metadata={op_name="jit(reproducer_1_fn)/sub" stack_frame_id=15}

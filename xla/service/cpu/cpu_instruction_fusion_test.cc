@@ -1140,5 +1140,144 @@ TEST_F(InstructionFusionTest, SkipReduceComputationsIfFusionEmitters) {
   EXPECT_FALSE(changed);
 }
 
+bool FusionComputesShiftValueForReduce(const HloInstruction* fusion) {
+  if (fusion->opcode() != HloOpcode::kFusion) {
+    return false;
+  }
+  const HloInstruction* multiply = nullptr;
+  const HloInstruction* reduce = nullptr;
+  for (const HloInstruction* instr : fusion->fused_instructions()) {
+    if (instr->opcode() == HloOpcode::kMultiply) {
+      multiply = instr;
+    }
+    if (instr->opcode() == HloOpcode::kReduce) {
+      reduce = instr;
+    }
+  }
+  return multiply != nullptr && reduce != nullptr &&
+         reduce->operand(0) == multiply;
+}
+
+bool FusionRecomputesShiftValueForExpShift(
+    const HloInstruction* fusion, const HloInstruction* dot) {
+  if (fusion->opcode() != HloOpcode::kFusion) {
+    return false;
+  }
+  const HloInstruction* multiply = nullptr;
+  const HloInstruction* subtract = nullptr;
+  for (const HloInstruction* instr : fusion->fused_instructions()) {
+    if (instr->opcode() == HloOpcode::kMultiply) {
+      multiply = instr;
+    }
+    if (instr->opcode() == HloOpcode::kSubtract) {
+      subtract = instr;
+    }
+  }
+  if (multiply == nullptr || subtract == nullptr) {
+    return false;
+  }
+  const HloComputation* fused_computation = fusion->fused_instructions_computation();
+  const HloInstruction* fusion_instr = fused_computation->FusionInstruction();
+  bool uses_dot = false;
+  for (int64_t i = 0; i < fusion_instr->operand_count(); ++i) {
+    if (fusion_instr->operand(i) == dot) {
+      const HloInstruction* param = fusion->fused_parameter(i);
+      if (multiply->operand(0) == param || multiply->operand(1) == param) {
+        uses_dot = true;
+        break;
+      }
+    }
+  }
+  return uses_dot && subtract->operand(0) == multiply;
+}
+
+bool HasSplitCoupledReductionShiftExpFusion(const HloModule& module) {
+  const HloComputation* entry = module.entry_computation();
+  const HloInstruction* dot = nullptr;
+  for (const HloInstruction* instr : entry->instructions()) {
+    if (instr->opcode() == HloOpcode::kDot) {
+      dot = instr;
+      break;
+    }
+  }
+  if (dot == nullptr) {
+    return false;
+  }
+
+  const HloInstruction* reduce_fusion = nullptr;
+  const HloInstruction* shift_fusion = nullptr;
+  for (const HloInstruction* instr : entry->instructions()) {
+    if (!instr->IsLoopFusion()) {
+      continue;
+    }
+    if (FusionComputesShiftValueForReduce(instr)) {
+      reduce_fusion = instr;
+    }
+    if (FusionRecomputesShiftValueForExpShift(instr, dot)) {
+      shift_fusion = instr;
+    }
+  }
+  return reduce_fusion != nullptr && shift_fusion != nullptr;
+}
+
+TEST_F(InstructionFusionTest, AvoidSplitCoupledReductionShiftExpFusions) {
+  absl::string_view module_string = R"(
+HloModule module
+
+%max (p0: f32[], p1: f32[]) -> f32[] {
+  %p0 = f32[] parameter(0)
+  %p1 = f32[] parameter(1)
+  ROOT %m = f32[] maximum(%p0, %p1)
+}
+
+ENTRY main {
+  %lhs = f32[5,5] parameter(0)
+  %rhs = f32[5,5] parameter(1)
+  %dot = f32[5,5] dot(%lhs, %rhs), lhs_contracting_dims={1}, rhs_contracting_dims={0}
+  %scale = f32[] constant(0.44721359)
+  %broadcast_scale = f32[5,5] broadcast(%scale), dimensions={}
+  %multiply = f32[5,5] multiply(%dot, %broadcast_scale)
+  %neg_inf = f32[] constant(-inf)
+  %reduce_max = f32[5] reduce(%multiply, %neg_inf), dimensions={1}, to_apply=%max
+  %broadcast_max = f32[5,5] broadcast(%reduce_max), dimensions={0}
+  %subtract = f32[5,5] subtract(%multiply, %broadcast_max)
+  ROOT %exp = f32[5,5] exponential(%subtract)
+}
+)";
+
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(module_string));
+  TF_ASSERT_OK_AND_ASSIGN(bool changed,
+                          CpuInstructionFusion(&alias_info_).Run(module.get()));
+  EXPECT_TRUE(changed);
+  EXPECT_FALSE(HasSplitCoupledReductionShiftExpFusion(*module));
+}
+
+TEST_F(InstructionFusionTest, StillFusesUncoupledReduceAndSubtract) {
+  absl::string_view module_string = R"(
+HloModule module
+
+%add (p0: f32[], p1: f32[]) -> f32[] {
+  %p0 = f32[] parameter(0)
+  %p1 = f32[] parameter(1)
+  ROOT %a = f32[] add(%p0, %p1)
+}
+
+ENTRY main {
+  %arg = f32[8,16] parameter(0)
+  %init = f32[] constant(0)
+  %reduce = f32[8] reduce(%arg, %init), dimensions={1}, to_apply=%add
+  %broadcast = f32[8,16] broadcast(%reduce), dimensions={0}
+  ROOT %subtract = f32[8,16] subtract(%arg, %broadcast)
+}
+)";
+
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(module_string));
+  TF_ASSERT_OK_AND_ASSIGN(bool changed,
+                          CpuInstructionFusion(&alias_info_).Run(module.get()));
+  EXPECT_TRUE(changed);
+}
+
 }  // namespace
 }  // namespace xla::cpu
