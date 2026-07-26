@@ -23,6 +23,7 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/algorithm/container.h"
+#include "absl/status/status_matchers.h"  // IWYU pragma: keep
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -37,7 +38,6 @@ limitations under the License.
 #include "xla/service/transpose_folding.h"
 #include "xla/shape.h"
 #include "xla/tests/test_utils.h"
-#include "tsl/platform/status_matchers.h"  // IWYU pragma: keep
 #include "xla/tsl/platform/statusor.h"
 #include "xla/xla_data.pb.h"
 
